@@ -1,0 +1,29 @@
+ifndef COMET_DIR
+    $(error COMET_DIR is undefined)
+endif
+
+TARGET_SIM   ?= $(COMET_DIR)/comet.sim
+TARGET_FLAGS ?= $(RISCV_TARGET_FLAGS)
+ifeq ($(shell command -v $(TARGET_SIM) 2> /dev/null),)
+    $(error Target simulator executable '$(TARGET_SIM)` not found)
+endif
+
+RUN_TARGET=\
+    $(TARGET_SIM) $(TARGET_FLAGS) $< -s $(*).signature.output;
+
+RISCV_PREFIX   ?= riscv32-unknown-elf-
+RISCV_GCC      ?= $(RISCV_PREFIX)gcc
+RISCV_OBJDUMP  ?= $(RISCV_PREFIX)objdump
+RISCV_READELF  ?= $(RISCV_PREFIX)readelf
+RISCV_GCC_OPTS ?= -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles $(RVTEST_DEFINES)
+
+COMPILE_TARGET=\
+	echo "Using $$(RISCV_GCC) $(1) $$(RISCV_GCC_OPTS).";\
+	$$(RISCV_GCC) $(1) $$(RISCV_GCC_OPTS) \
+		-I$(ROOTDIR)/riscv-test-env/ \
+		-I$(TARGETDIR)/$(RISCV_TARGET)/ \
+		-T$(TARGETDIR)/$(RISCV_TARGET)/link.ld \
+		$$(<) -o $$@; \
+	$$(RISCV_OBJDUMP) -D $$@ > $$@.objdump; \
+		  $$(RISCV_OBJDUMP) $$@ --source > $$@.debug; \
+		  $$(RISCV_READELF) -a $$@ > $$@.readelf

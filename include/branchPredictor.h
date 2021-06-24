@@ -94,6 +94,74 @@ public:
   }
 };
 
+template<int SIZE, int BITS, int ENTRIES, int THRESHOLD, int LR>
+class PerceptronBranchPredictor : public BranchPredictorWrapper<PerceptronBranchPredictor<SIZE, BITS, ENTRIES, THRESHOLD, LR> > {
+    static const int LOG_ENTRIES = log2const<ENTRIES>::value;
+    static const int PERC_MAX    = (1 << (BITS - 1)) - 1;
+    static const int PERC_MIN    = -(PERC_MAX + 1);
+    static const int PERC_INC_TH = PERC_MAX - LR + 1;
+    static const int PERC_DEC_TH = PERC_MIN + LR - 1;
+    
+    ac_int<BITS, true> perceptron[ENTRIES][SIZE+1];
+    bool bht[SIZE];    // branch history table
+    int  dp;           // dot product
+    bool pd;           // prediction
+
+public:
+    PerceptronBranchPredictor() {
+        for (int i = 0; i < ENTRIES; i++) {
+            for (int j = 0; j < SIZE+1; j++) {
+                perceptron[i][j] = 0;
+            }
+        }
+        for (int i = 0; i < SIZE; i++) {
+            bht[i] = 0;
+        }
+    }
+    
+    void _update(ac_int<32, false> pc, bool isBranch) {
+        if (pd == isBranch && dp > THRESHOLD) return;
+        ac_int<LOG_ENTRIES, false> index = pc.slc<LOG_ENTRIES>(0);
+        if (isBranch) {
+            if (perceptron[index][SIZE] < PERC_INC_TH) perceptron[index][SIZE] += LR;
+        } else {
+            if (perceptron[index][SIZE] > PERC_DEC_TH) perceptron[index][SIZE] -= LR;
+        }
+        
+        update:for (int i = 0; i < SIZE; i++) {
+            if (bht[i] == isBranch) {
+                if (perceptron[index][i] < PERC_INC_TH) perceptron[index][i] += LR;
+            } else {
+                if (perceptron[index][i] > PERC_DEC_TH) perceptron[index][i] -= LR;
+            }
+        }
+
+        shift_reg:for (int i = 0; i < SIZE-1; i++) {
+            bht[i] = bht[i+1];
+        }
+        bht[SIZE-1] = isBranch;
+    }
+
+    void _predict(ac_int<LOG_ENTRIES, false> index) {
+        dp = perceptron[index][SIZE];
+        predict:for (int i = 0; i < SIZE; i++) {
+            if (bht[i]) {
+                dp += perceptron[index][i];
+            } else {
+                dp -= perceptron[index][i];
+            }
+        }
+        pd = dp >= 0;
+        if (!pd) dp = -dp;
+    }
+    
+    void _process(ac_int<32, false> pc, bool& isBranch) {
+        ac_int<LOG_ENTRIES, false> index = pc.slc<LOG_ENTRIES>(0);
+        _predict(index);
+        isBranch = pd;
+    }
+};
+
 using BranchPredictor = BitBranchPredictor<2, 4>;
 
 #endif /* INCLUDE_BRANCHPREDICTOR_H_ */
