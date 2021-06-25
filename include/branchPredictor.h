@@ -241,15 +241,15 @@ public:
         predict:for (int i = 0; i < SIZE; i += 2) {
             if (bht[i] == bht[i+1]) {
                 if (bht[i]) {
-                    dp -= bht[i+1];
+                    dp -= perceptron[index][i+1];
                 } else {
-                    dp += bht[i+1];
+                    dp += perceptron[index][i+1];
                 }
             } else {
                 if (bht[i]) {
-                    dp -= bht[i];
+                    dp -= perceptron[index][i];
                 } else {
-                    dp += bht[i];
+                    dp += perceptron[index][i];
                 }
             }
         }
